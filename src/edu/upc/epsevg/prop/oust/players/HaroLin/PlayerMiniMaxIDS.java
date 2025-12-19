@@ -49,18 +49,20 @@ public class PlayerMiniMaxIDS implements IPlayer, IAuto {
         
         List<Point> moves = gs.getMoves();
         
-        if(moves.isEmpty()) {
+        // Si no hay movimientos, pasar turno con lista vacía
+        if (moves.isEmpty() || moves == null) {
             return new PlayerMove(new ArrayList<>(), 0, 0, SearchType.MINIMAX_IDS);
         }
         
-        Point bestMove = null;
+        Point bestMove = moves.get(0);
         Point currentBestMove = null;
         int depth = 1;
         
-        while(!timeoutOccurred && depth < 100) {
+        // Iterative Deepening
+        while (!timeoutOccurred && depth < 50) {
             currentBestMove = searchAtDepth(gs, depth);
             
-            if(!timeoutOccurred) {
+            if (!timeoutOccurred && currentBestMove != null) {
                 bestMove = currentBestMove;
                 maxDepthReached = depth;
             }
@@ -68,16 +70,12 @@ public class PlayerMiniMaxIDS implements IPlayer, IAuto {
             depth++;
             
             long elapsed = System.currentTimeMillis() - startTime;
-            if(elapsed > TIMEOUT_MS * 0.7) {
+            if (elapsed > TIMEOUT_MS * 0.7) {
                 break;
             }
         }
         
-        if(bestMove == null) {
-            bestMove = moves.get(0);
-            maxDepthReached = 1;
-        }
-        System.out.println("IDS - Profundidad alcanzada: " + maxDepthReached + ", Nodos: " + nodesExplored);
+        System.out.println("IDS - Profundidad: " + maxDepthReached + ", Nodos: " + nodesExplored);
         
         List<Point> moveSequence = generateMoveSequence(gs, bestMove);
         
@@ -113,7 +111,7 @@ public class PlayerMiniMaxIDS implements IPlayer, IAuto {
     }
     
     private double minimax(GameStatus gs, int depth, double alpha, double beta, boolean maximizing) {
-        if(nodesExplored % 1000 == 0) {
+        if(nodesExplored % 500 == 0) {
             if(System.currentTimeMillis() - startTime > TIMEOUT_MS) {
                 timeoutOccurred = true;
                 return 0;
@@ -198,9 +196,9 @@ public class PlayerMiniMaxIDS implements IPlayer, IAuto {
 
         PlayerType opponent = (myColor == PlayerType.PLAYER1) ? PlayerType.PLAYER2 : PlayerType.PLAYER1;
 
-        for(int row = 0; row < 2 * size - 1; row++) {
-            for(int col = 0; col < 2 * size - 1; col++) {
-                PlayerType color = gs.getColor(row, col);
+        for(int row = 0; row < (2*size)-1; row++) {
+            for(int col = 0; col < (2*size)-1; col++) {
+                    PlayerType color = gs.getColor(row, col);
                 if(color == myColor) {
                     myPieces++;
                     int distToCenter = Math.abs(row - center) + Math.abs(col - center);
@@ -216,54 +214,79 @@ public class PlayerMiniMaxIDS implements IPlayer, IAuto {
         score += (myPieces - opponentPieces) * 100;
         score += myPieces * 10;
         score -= opponentPieces * 10;
-        score += centerControl * 2;
 
         if(opponentPieces < 3) {
             score += 500;
         }
 
-        score += gs.getMoves().size() * 5;
         return score;
     }
     
     private List<Point> generateMoveSequence(GameStatus gs, Point firstMove) {
         List<Point> sequence = new ArrayList<>();
+        
+        if (firstMove == null) {
+            return sequence;
+        }
+        
         GameStatus tempGs = new GameStatus(gs);
         Point currentMove = firstMove;
+        int maxIterations = 50;
+        int iterations = 0;
         
-        while(currentMove != null) {
+        while (currentMove != null && iterations < maxIterations) {
             sequence.add(currentMove);
             PlayerType currentPlayer = tempGs.getCurrentPlayer();
-            tempGs.placeStone(currentMove);
             
-            if(tempGs.getCurrentPlayer() == currentPlayer && !tempGs.isGameOver()) {
+            try {
+                tempGs.placeStone(currentMove);
+            } catch (Exception e) {
+                System.err.println("Error en generateMoveSequence: " + currentMove);
+                break;
+            }
+            
+            if (tempGs.getCurrentPlayer() == currentPlayer && !tempGs.isGameOver()) {
                 List<Point> nextMoves = tempGs.getMoves();
-                if(!nextMoves.isEmpty()) {
+                if (nextMoves != null && !nextMoves.isEmpty()) {
                     currentMove = selectBestCapture(tempGs, nextMoves);
                 } else {
                     break;
                 }
-            }       
+            } else {
+                break;
+            }
+            
+            iterations++;
         }
+        
         return sequence;
     }
         
-        private Point selectBestCapture(GameStatus gs, List<Point> moves) {
-            Point bestMove = moves.get(0);
-            double bestValue = Double.NEGATIVE_INFINITY;
-            
-            for(Point move : moves) {
+    private Point selectBestCapture(GameStatus gs, List<Point> moves) {
+        if (moves == null || moves.isEmpty()) {
+            return null;
+        }
+
+        Point bestMove = moves.get(0);
+        double bestValue = Double.NEGATIVE_INFINITY;
+
+        for (Point move : moves) {
+            try {
                 GameStatus nextState = new GameStatus(gs);
                 nextState.placeStone(move);
                 double value = evaluate(nextState);
-                
-                if(value > bestValue) {
+
+                if (value > bestValue) {
                     bestValue = value;
                     bestMove = move;
                 }
+            } catch (Exception e) {
+                continue;
             }
-            return bestMove;
         }
+
+        return bestMove;
+    }
         
         @Override
         public void timeout() {
