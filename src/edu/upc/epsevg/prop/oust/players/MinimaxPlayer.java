@@ -23,44 +23,67 @@ public class MinimaxPlayer implements IPlayer, IAuto{
     private PlayerType myColor;
     private long nodesExplorats;
     
-   
+    
+    /**
+     * Constructor que inicializa un jugador Minimax con la profundidad especificada.
+     * 
+     * @param maxDepth la profundidad máxima de búsqueda en el árbol de juego.
+     *                 Valores mayores implican mejor juego pero mayor tiempo de cómputo.
+     */
     public MinimaxPlayer(int maxDepth){
         this.name = "Minimax" + maxDepth;
         this.maxDepth = maxDepth;
     } 
     
+    /**
+     * Obtiene el nombre del jugador.
+     * 
+     * @return el nombre del jugador en formato "MinimaxN" donde N es la profundidad máxima
+     */
     @Override
     public String getName(){
         return name;
     }
 
+    /**
+     * Calcula y ejecuta el mejor movimiento posible para el estado actual del juego.
+     * 
+     * <p>Este método utiliza el algoritmo Minimax con poda Alpha-Beta para explorar
+     * el árbol de posibles jugadas y seleccionar la que maximiza la ventaja del jugador.
+     * También genera la secuencia completa de movimientos incluyendo todas las capturas
+     * consecutivas si las hay.</p>
+     * 
+     * @param gs el estado actual del juego
+     * @return un objeto {@code PlayerMove} que contiene la secuencia de movimientos,
+     *         el número de nodos explorados, la profundidad y el tipo de búsqueda,
+     *         o {@code null} si no hay movimientos posibles
+     */
      @Override
     public PlayerMove move(GameStatus gs) {
         myColor = gs.getCurrentPlayer();
         nodesExplorats = 0;
         
         // Obtener movimientos posibles
-        List<Point> moves = gs.getMoves();
+        List<Point> moviments = gs.getMoves();
         
-        if (moves.isEmpty()) {
+        if (moviments.isEmpty()) {
             return null; // Pasar turno
         }
         
-        Point bestMove = null;
-        double bestValue = Double.NEGATIVE_INFINITY;
+        Point millorMoviment = null;
+        double millorValor = Double.NEGATIVE_INFINITY;
         double alpha = Double.NEGATIVE_INFINITY;
         double beta = Double.POSITIVE_INFINITY;
         
-        // Explorar cada movimiento posible
-        for (Point move : moves) {
-            GameStatus nextState = new GameStatus(gs);
-            nextState.placeStone(move);
+        for (Point moviment : moviments) {
+            GameStatus seguentEstat = new GameStatus(gs);
+            seguentEstat.placeStone(moviment);
             
-            double value = minimax(nextState, maxDepth - 1, alpha, beta, false);
+            double value = minimax(seguentEstat, maxDepth - 1, alpha, beta, false);
             
-            if (value > bestValue) {
-                bestValue = value;
-                bestMove = move;
+            if (value > millorValor) {
+                millorValor = value;
+                millorMoviment = moviment;
             }
             
             alpha = Math.max(alpha, value);
@@ -68,65 +91,90 @@ public class MinimaxPlayer implements IPlayer, IAuto{
         
         System.out.println("Nodos explorados: " + nodesExplorats);
         
-        // Generar la secuencia completa de movimientos (incluyendo capturas)
-        List<Point> moveSequence = generateMoveSequence(gs, bestMove);
+        List<Point> moveSequence = generateMoveSequence(gs, millorMoviment);
         
         return new PlayerMove(moveSequence, nodesExplorats, maxDepth, SearchType.MINIMAX);
     }
     
     /**
-     * Genera la secuencia completa de movimientos incluyendo todas las capturas
+     * Genera la secuencia completa de movimientos incluyendo todas las capturas consecutivas.
+     * 
+     * <p>En algunos juegos como Othello, es posible realizar múltiples capturas en un mismo turno.
+     * Este método simula todas las capturas consecutivas hasta que el turno termine o no haya
+     * más capturas disponibles.</p>
+     * 
+     * @param gs el estado actual del juego
+     * @param primerMoviment el primer movimiento de la secuencia
+     * @return una lista con todos los puntos de la secuencia de movimientos
      */
-    private List<Point> generateMoveSequence(GameStatus gs, Point firstMove) {
-        List<Point> sequence = new ArrayList<>();
-        GameStatus tempGs = new GameStatus(gs);
-        Point currentMove = firstMove;
+    private List<Point> generateMoveSequence(GameStatus gs, Point primerMoviment) {
+        List<Point> sequencia = new ArrayList<>();
+        GameStatus estat = new GameStatus(gs);
+        Point movimentActual = primerMoviment;
         
-        while (currentMove != null) {
-            sequence.add(currentMove);
-            PlayerType currentPlayer = tempGs.getCurrentPlayer();
-            tempGs.placeStone(currentMove);
-            
-            // Si después de mover seguimos siendo el mismo jugador, fue captura
-            // y debemos continuar la secuencia
-            if (tempGs.getCurrentPlayer() == currentPlayer && !tempGs.isGameOver()) {
-                // Buscar el mejor siguiente movimiento en esta secuencia de capturas
-                List<Point> nextMoves = tempGs.getMoves();
-                if (!nextMoves.isEmpty()) {
-                    currentMove = selectBestCapture(tempGs, nextMoves);
+        while (movimentActual != null) {
+            sequencia.add(movimentActual);
+            PlayerType jugadorActual = estat.getCurrentPlayer();
+            estat.placeStone(movimentActual);
+            if (estat.getCurrentPlayer() == jugadorActual && !estat.isGameOver()) {
+                List<Point> proximMoviments = estat.getMoves();
+                if (!proximMoviments.isEmpty()) {
+                    movimentActual = selectBestCapture(estat, proximMoviments);
                 } else {
                     break;
                 }
             } else {
-                // Ya no capturamos más, termina la secuencia
                 break;
             }
         }
         
-        return sequence;
+        return sequencia;
     }
     
     /**
-     * Selecciona la mejor captura de la lista de movimientos disponibles
+     * Selecciona la mejor captura de entre los movimientos disponibles.
+     * 
+     * <p>Evalúa cada movimiento posible y selecciona el que produce el mejor
+     * valor según la función de evaluación heurística.</p>
+     * 
+     * @param gs el estado actual del juego
+     * @param moviments la lista de movimientos disponibles
+     * @return el punto correspondiente a la mejor captura
      */
-    private Point selectBestCapture(GameStatus gs, List<Point> moves) {
-        Point bestMove = moves.get(0);
-        double bestValue = Double.NEGATIVE_INFINITY;
+    private Point selectBestCapture(GameStatus gs, List<Point> moviments) {
+        Point millorMoviment = moviments.get(0);
+        double millorValor = Double.NEGATIVE_INFINITY;
         
-        for (Point move : moves) {
-            GameStatus nextState = new GameStatus(gs);
-            nextState.placeStone(move);
-            double value = evaluate(nextState);
+        for (Point moviment : moviments) {
+            GameStatus seguentEstat = new GameStatus(gs);
+            seguentEstat.placeStone(moviment);
+            double valor = evaluate(seguentEstat);
             
-            if (value > bestValue) {
-                bestValue = value;
-                bestMove = move;
+            if (valor > millorValor) {
+                millorValor = valor;
+                millorMoviment = moviment;
             }
         }
         
-        return bestMove;
+        return millorMoviment;
     }
     
+    
+    /**
+     * Algoritmo Minimax con poda Alpha-Beta para búsqueda adversarial.
+     * 
+     * <p>Explora recursivamente el árbol de juego hasta la profundidad especificada
+     * o hasta alcanzar un estado terminal. Utiliza poda Alpha-Beta para reducir
+     * el número de nodos que deben ser evaluados.</p>
+     * 
+     * @param gs el estado actual del juego
+     * @param depth la profundidad restante de búsqueda
+     * @param alpha el mejor valor ya encontrado para el jugador maximizador (límite inferior)
+     * @param beta el mejor valor ya encontrado para el jugador minimizador (límite superior)
+     * @param maximitzador {@code true} si es el turno del jugador maximizador,
+     *                     {@code false} si es el turno del jugador minimizador
+     * @return el valor heurístico del estado evaluado
+     */
     private double minimax(GameStatus gs, int depth, double alpha, double beta, boolean maximitzador){
         nodesExplorats++;
         if(depth ==0 || gs.isGameOver()){
@@ -179,6 +227,22 @@ public class MinimaxPlayer implements IPlayer, IAuto{
     }
     
     
+    /**
+     * Función de evaluación heurística que calcula el valor de un estado del juego.
+     * 
+     * <p>La función considera varios factores:</p>
+     * <ul>
+     *   <li>Si el juego ha terminado, retorna +10000 para victoria o -10000 para derrota</li>
+     *   <li>Diferencia de piezas entre el jugador y el oponente (peso: 10)</li>
+     *   <li>Bonificación por número de piezas propias (peso: 2)</li>
+     *   <li>Penalización por número de piezas del oponente (peso: 2)</li>
+     *   <li>Bonificación si el oponente tiene menos de 5 piezas (peso: 50)</li>
+     * </ul>
+     * 
+     * @param gs el estado del juego a evaluar
+     * @return un valor numérico que representa la bondad del estado para el jugador actual.
+     *         Valores positivos favorecen al jugador, valores negativos al oponente.
+     */
     private double evaluate(GameStatus gs) {
         if (gs.isGameOver()) {
             if (gs.GetWinner() == myColor) {
